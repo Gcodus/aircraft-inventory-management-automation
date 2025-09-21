@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AiVA - Stock Movements</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    #toast{position:fixed;bottom:20px;right:20px;background:#1e293b;color:#fff;padding:12px 16px;border-radius:8px;box-shadow:0 4px 8px rgba(0,0,0,.15);opacity:0;transform:translateY(20px);transition:opacity .3s,transform .3s;z-index:9999;pointer-events:none}
+    #toast.show{opacity:1;transform:translateY(0)}
+    .filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:8px 0 6px}
+    .table-wrap{overflow:auto}
+    table{width:100%;border-collapse:collapse;margin-top:8px;border:1px solid #e5e7eb}
+    th,td{padding:10px 12px;border-bottom:1px solid #f1f5f9;text-align:left;white-space:nowrap}
+    thead th{background:#fafafa;font-weight:700}
+    .mini{font-size:.9rem;color:#555}
+  </style>
+</head>
+<body>
+  <div class="page-shell">
+    <div class="page-shell__inner">
+      <!-- Logo -->
+      <header class="logo-wrap">
+        <div class="brand-box">
+          <h1 class="brand">AiVA</h1>
+          <p class="tagline"><span>Aircraft Management. In Real Time.</span></p>
+        </div>
+      </header>
+
+      <div class="content">
+        <!-- Navbar Optional -->
+        <nav class="navbar">
+          <ul>
+            <li><a href="index.html">Home</a></li>
+            <li><a href="inventory.html">Inventory</a></li>
+            <li><a href="workorders.html">Work Orders</a></li>
+            <li><a href="reports.html">Reports</a></li>
+            <li><a href="settings.html">Settings</a></li>
+          </ul>
+        </nav>
+
+        <main>
+          <h2>Stock Movements</h2>
+          <p class="mini">Audit of ISSUE / RETURN / ADJUST (last 200).</p>
+
+          <div class="filters">
+            <label>Type
+              <select id="fType">
+                <option value="">All</option>
+                <option>ISSUE</option>
+                <option>RETURN</option>
+                <option>ADJUST</option>
+              </select>
+            </label>
+            <label>Search
+              <input id="fQ" placeholder="part / batch / reason" />
+            </label>
+            <label>From
+              <input id="fFrom" type="date" />
+            </label>
+            <label>To
+              <input id="fTo" type="date" />
+            </label>
+            <button id="btnClear" class="export-btn" type="button">Clear</button>
+          </div>
+
+          <div class="inv-meta">Results: <span id="count" class="badge">0</span></div>
+
+          <div class="table-wrap">
+            <table id="tbl">
+              <thead>
+                <tr>
+                  <th>When</th>
+                  <th>Type</th>
+                  <th>Δ Qty</th>
+                  <th>Part</th>
+                  <th>Batch</th>
+                  <th>Reason</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </main>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <script type="module">
+    const toast = document.getElementById('toast');
+    const tbody = document.querySelector('#tbl tbody');
+    const count = document.getElementById('count');
+    const fType = document.getElementById('fType');
+    const fQ    = document.getElementById('fQ');
+    const fFrom = document.getElementById('fFrom');
+    const fTo   = document.getElementById('fTo');
+    const btnClear = document.getElementById('btnClear');
+
+    function showToast(msg){ toast.textContent=msg; toast.classList.add('show'); setTimeout(()=>toast.classList.remove('show'), 1800); }
+
+    let all = [];
+
+    async function load() {
+      try {
+        const res = await fetch('/api/movements');
+        const json = await res.json();
+        if (!json.ok) return showToast('⚠️ Failed to load');
+        all = json.data || [];
+        render();
+      } catch (e) {
+        console.error(e);
+        showToast('⚠️ Failed to load');
+      }
+    }
+
+    function render() {
+      const type = fType.value;
+      const q = fQ.value.trim().toLowerCase();
+      const from = fFrom.value ? new Date(fFrom.value + 'T00:00:00') : null;
+      const to   = fTo.value   ? new Date(fTo.value   + 'T23:59:59') : null;
+
+      const rows = all.filter(r => {
+        if (type && r.movement_type !== type) return false;
+        if (q) {
+          const hay = `${r.part_number||''} ${r.batch_number||''} ${r.reason||''}`.toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        const when = new Date(r.created_at);
+        if (from && when < from) return false;
+        if (to && when > to) return false;
+        return true;
+      });
+
+      count.textContent = rows.length;
+
+      tbody.innerHTML = rows.map(r => `
+        <tr>
+          <td>${new Date(r.created_at).toLocaleString()}</td>
+          <td>${r.movement_type}</td>
+          <td>${r.qty_change}</td>
+          <td>${r.part_number || '-'}</td>
+          <td>${r.batch_number || '-'}</td>
+          <td>${r.reason || '-'}</td>
+        </tr>
+      `).join('') || `<tr><td colspan="6">No movements.</td></tr>`;
+    }
+
+    [fType, fQ, fFrom, fTo].forEach(el => el.addEventListener('input', render));
+    btnClear.addEventListener('click', () => {
+      fType.value = '';
+      fQ.value = '';
+      fFrom.value = '';
+      fTo.value = '';
+      render();
+    });
+
+    load();
+  </script>
+</body>
+</html>

@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AiVA - Work Orders</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    /* Toast */
+    #toast{position:fixed;bottom:20px;right:20px;background:#1e293b;color:#fff;padding:12px 16px;border-radius:8px;box-shadow:0 4px 8px rgba(0,0,0,.15);opacity:0;transform:translateY(20px);transition:opacity .3s,transform .3s;z-index:9999;pointer-events:none}
+    #toast.show{opacity:1;transform:translateY(0)}
+    /* Cards & table */
+    .wo-card{border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin:12px 0}
+    .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+    .mini{font-size:.9rem;color:#555}
+    .btnlink{background:none;border:0;color:#2563eb;cursor:pointer;font-weight:700;padding:0 4px}
+    .btnlink.danger{color:#dc2626}
+    .btnlink.green{color:#16a34a}
+    .inline-input{width:90px;padding:6px;border:1px solid #e5e7eb;border-radius:6px}
+    .table-mini{width:100%;border-collapse:collapse;margin-top:10px}
+    .table-mini th,.table-mini td{border-bottom:1px solid #f1f5f9;padding:8px;text-align:left}
+    .table-mini th{background:#fafafa;font-weight:700}
+  </style>
+</head>
+<body>
+  <div class="page-shell">
+    <div class="page-shell__inner">
+      <!-- Logo -->
+      <header class="logo-wrap">
+        <div class="brand-box">
+          <h1 class="brand">AiVA</h1>
+          <p class="tagline"><span>Aircraft Management. In Real Time.</span></p>
+        </div>
+      </header>
+
+      <div class="content">
+        <!-- Navbar -->
+        <nav class="navbar">
+          <ul>
+            <li><a href="index.html">Home</a></li>
+            <li><a href="inventory.html">Inventory</a></li>
+            <li><a href="workorders.html" aria-current="page">Work Orders</a></li>
+            <li><a href="reports.html">Reports</a></li>
+            <li><a href="settings.html">Settings</a></li>
+          </ul>
+        </nav>
+
+        <main>
+          <h2>Work Orders</h2>
+          <p>Create a work order, add lines, then Issue/Return stock.</p>
+
+          <!-- Create WO -->
+          <form id="wo-form" class="row" style="margin:10px 0 16px;">
+            <input name="code" placeholder="WO Code (leave blank for auto)" />
+            <input name="requested_by" placeholder="Requested by" />
+            <select name="status" class="inline-input">
+              <option value="draft" selected>draft</option>
+              <option value="issued">issued</option>
+              <option value="closed">closed</option>
+            </select>
+            <button class="export-btn" type="submit">Create</button>
+          </form>
+
+          <!-- Search -->
+          <div class="inv-search">
+            <label for="woq">Search</label>
+            <input id="woq" type="text" placeholder="Search code / status / requester…" autocomplete="off" />
+            <button id="clearWO" type="button" class="clear-btn" aria-label="Clear" hidden>Clear</button>
+          </div>
+
+          <div class="inv-meta">Results: <span id="woCount" class="badge">0</span></div>
+          <div id="wo-list"></div>
+        </main>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <script type="module">
+    const toast = document.getElementById('toast');
+    const list = document.getElementById('wo-list');
+    const count = document.getElementById('woCount');
+    function showToast(msg){ toast.textContent=msg; toast.classList.add('show'); setTimeout(()=>toast.classList.remove('show'), 2000); }
+
+    let allWOs = [];
+
+    async function loadWOs(q='') {
+      const res = await fetch('/api/workorders' + (q ? '?q=' + encodeURIComponent(q) : ''));
+      const json = await res.json();
+      if (!json.ok) { showToast('⚠️ Failed to load'); return; }
+      allWOs = json.data || [];
+      count.textContent = allWOs.length;
+      renderList(allWOs);
+    }
+
+    async function loadLines(woId){
+      const res = await fetch(`/api/workorders/${woId}/lines`);
+      const json = await res.json();
+      return json.ok ? (json.data || []) : [];
+    }
+
+    async function renderList(rows){
+      if (!rows.length) {
+        list.innerHTML = `<p class="mini">No work orders yet. Create one above.</p>`;
+        return;
+      }
+      // Build cards, fetch lines per WO
+      const blocks = await Promise.all(rows.map(async wo => {
+        const lines = await loadLines(wo.id);
+        const linesHtml = (lines.length
+          ? lines.map(l => `
+              <tr data-line="${l.line_id}">
+                <td>${l.part_number}</td>
+                <td>${l.batch_number}</td>
+                <td>${l.onhand}</td>
+                <td>${l.qty_requested}</td>
+                <td>${l.qty_issued}</td>
+                <td>
+                  <input class="inline-input" type="number" min="1" placeholder="Qty"/>
+                  <button class="btnlink green issue">Issue</button>
+                  <button class="btnlink return">Return</button>
+                  <button class="btnlink danger del-line">Delete</button>
+                </td>
+              </tr>
+            `).join('')
+          : `<tr><td colspan="6">No lines yet.</td></tr>`
+        );
+
+        return `
+          <div class="wo-card" data-wo="${wo.id}">
+            <div class="row">
+              <strong>${wo.code}</strong>
+              <span class="mini">• ${new Date(wo.created_at).toLocaleString()}</span>
+            </div>
+            <div class="row" style="margin-top:6px;">
+              <label>Status
+                <select class="inline-input status">
+                  <option value="draft" ${wo.status==='draft'?'selected':''}>draft</option>
+                  <option value="issued" ${wo.status==='issued'?'selected':''}>issued</option>
+                  <option value="closed" ${wo.status==='closed'?'selected':''}>closed</option>
+                </select>
+              </label>
+              <span class="mini">Requested by: ${wo.requested_by || '-'}</span>
+              <button class="btnlink danger delete-wo">Delete WO</button>
+            </div>
+
+            <!-- Add line -->
+            <form class="row add-line" style="margin-top:8px;">
+              <input name="part_number" placeholder="Part Number (exact)" required />
+              <input name="batch_number" placeholder="Batch Number (exact)" required />
+              <input name="qty" type="number" min="1" placeholder="Qty" required />
+              <input name="note" placeholder="Note (optional)" />
+              <button class="export-btn" type="submit">Add Line</button>
+            </form>
+
+            <!-- Lines table -->
+            <table class="table-mini">
+              <thead>
+                <tr>
+                  <th>Part</th>
+                  <th>Batch</th>
+                  <th>On Hand</th>
+                  <th>Requested</th>
+                  <th>Issued</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody class="lines">${linesHtml}</tbody>
+            </table>
+          </div>
+        `;
+      }));
+      list.innerHTML = blocks.join('');
+    }
+
+    // Create WO
+    document.getElementById('wo-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const f = e.target;
+      const payload = {
+        code: f.code.value || undefined,
+        requested_by: f.requested_by.value || null,
+        status: f.status.value
+      };
+      const res = await fetch('/api/workorders', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      });
+      const json = await res.json();
+      if (json.ok) { showToast('✅ Work order created'); f.reset(); loadWOs(); }
+      else showToast('⚠️ Create failed');
+    });
+
+    // Search
+    const q = document.getElementById('woq');
+    const clearBtn = document.getElementById('clearWO');
+    q.addEventListener('input', () => {
+      const val = q.value.trim();
+      clearBtn.hidden = !val;
+      loadWOs(val);
+    });
+    clearBtn.addEventListener('click', () => { q.value=''; clearBtn.hidden=true; loadWOs(); });
+
+    // Delegate actions within WO list
+    list.addEventListener('click', async (e) => {
+      const card = e.target.closest('.wo-card');
+      if (!card) return;
+      const woId = card.dataset.wo;
+
+      // Delete WO
+      if (e.target.classList.contains('delete-wo')) {
+        if (!confirm('Delete this work order?')) return;
+        const res = await fetch(`/api/workorders/${woId}`, { method:'DELETE' });
+        const json = await res.json();
+        if (json.ok) { showToast('🗑️ Work order deleted'); loadWOs(q.value.trim()); }
+        else showToast('⚠️ Delete failed');
+      }
+
+      // Line row actions
+      const tr = e.target.closest('tr[data-line]');
+      if (!tr) return;
+      const lineId = tr.dataset.line;
+
+      // Issue
+      if (e.target.classList.contains('issue')) {
+        const val = Number(tr.querySelector('input[type="number"]').value);
+        if (!val || val <= 0) return showToast('Enter qty');
+        const res = await fetch(`/api/workorders/${woId}/lines/${lineId}/issue`, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ qty: val })
+        });
+        const json = await res.json();
+        if (json.ok) { showToast('📦 Issued'); loadWOs(q.value.trim()); }
+        else showToast('⚠️ Issue failed: ' + (json.error || ''));
+      }
+
+      // Return
+      if (e.target.classList.contains('return')) {
+        const val = Number(tr.querySelector('input[type="number"]').value);
+        if (!val || val <= 0) return showToast('Enter qty');
+        const res = await fetch(`/api/workorders/${woId}/lines/${lineId}/return`, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ qty: val })
+        });
+        const json = await res.json();
+        if (json.ok) { showToast('↩️ Returned'); loadWOs(q.value.trim()); }
+        else showToast('⚠️ Return failed: ' + (json.error || ''));
+      }
+
+      // Delete line
+      if (e.target.classList.contains('del-line')) {
+        if (!confirm('Delete this line?')) return;
+        const res = await fetch(`/api/workorders/${woId}/lines/${lineId}`, { method:'DELETE' });
+        const json = await res.json();
+        if (json.ok) { showToast('🗑️ Line deleted'); loadWOs(q.value.trim()); }
+        else showToast('⚠️ Delete failed');
+      }
+    });
+
+    // Change status
+    list.addEventListener('change', async (e) => {
+      if (!e.target.classList.contains('status')) return;
+      const card = e.target.closest('.wo-card');
+      const woId = card.dataset.wo;
+      const status = e.target.value;
+      const res = await fetch(`/api/workorders/${woId}/status`, {
+        method:'PUT', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ status })
+      });
+      const json = await res.json();
+      if (json.ok) showToast('🔄 Status updated');
+      else showToast('⚠️ Status change failed');
+    });
+
+    // Add line
+    list.addEventListener('submit', async (e) => {
+      if (!e.target.classList.contains('add-line')) return;
+      e.preventDefault();
+      const card = e.target.closest('.wo-card');
+      const woId = card.dataset.wo;
+      const f = e.target;
+      const payload = {
+        part_number: f.part_number.value.trim(),
+        batch_number: f.batch_number.value.trim(),
+        qty: Number(f.qty.value),
+        note: f.note.value || null
+      };
+      const res = await fetch(`/api/workorders/${woId}/lines`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      });
+      const json = await res.json();
+      if (json.ok) { showToast('➕ Line added'); f.reset(); loadWOs(q.value.trim()); }
+      else showToast('⚠️ Add line failed: ' + (json.error || ''));
+    });
+
+    // Initial load
+    loadWOs();
+  </script>
+</body>
+</html>

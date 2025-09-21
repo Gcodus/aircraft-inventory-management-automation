@@ -12,37 +12,40 @@
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
-  <div class="page">
-    <!-- Page frames mint + orange -->
-    <div class="frame mint"></div>
-    <div class="frame orange"></div>
+  <!-- frame divs hidden -->
+  <div class="page-shell">
+    <div class="page-shell__inner">
 
-    <!-- Logo block -->
-    <header class="logo-wrap">
-      <div class="brand-box">
-        <h1 class="brand">AiVA</h1>
-        <p class="tagline">Aircraft Management. In Real Time.</p>
+      <!-- Logo block -->
+      <header class="logo-wrap">
+        <div class="brand-box">
+          <h1 class="brand">AiVA</h1>
+          <p class="tagline">Aircraft Management. In Real Time.</p>
+        </div>
+      </header>
+
+      <!-- Main content area -->
+      <div class="content">
+        <!-- Navbar -->
+        <nav class="navbar">
+          <ul>
+            <li><a href="index.html" aria-current="page">Home</a></li>
+            <li><a href="inventory.html">Inventory</a></li>
+            <li><a href="workorders.html">Work Orders</a></li>
+            <li><a href="reports.html">Reports</a></li>
+            <li><a href="settings.html">Settings</a></li>
+            <li><a href="movements.html">Movements</a></li>
+          </ul>
+        </nav>
+
+        <!-- Home page specific content -->
+        <main>
+          <h2>Welcome to AiVA</h2>
+          <p>Your Aircraft Inventory Management, In Real Time.</p>
+          <!-- Is more home stuff needed ? -->
+        </main>
       </div>
-    </header>
-
-    <!-- content -->
-    <main class="content">
-      <!-- Nav double outline -->
- 
- <nav class="navbar">
-  <ul>
-    <li><a href="index.html">Home</a></li>
-    <li><a href="inventory.html">Inventory</a></li>
-    <li><a href="workorders.html">Work Orders</a></li>
-    <li><a href="reports.html">Reports</a></li>
-    <li><a href="settings.html">Settings</a></li>
-  </ul>
-</nav>
-
-      <!-- Empty - still thinking -->
-    </main>
+    </div>
   </div>
 </body>
 </html>
-
-

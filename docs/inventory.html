@@ -4,38 +4,266 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AiVA - Inventory</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css" />
+  <style>
+    /* Toast */
+    #toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: var(--mint);
+      color: var(--ink);
+      padding: 12px 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      transform: translateY(20px);
+      font-weight: 700;
+      z-index: 1000;
+    }
+    #toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .action-btn {
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      font-weight: bold;
+      margin: 0 4px;
+    }
+    .action-btn.edit { color: #065f46; }
+    .action-btn.delete { color: #b91c1c; }
+  </style>
 </head>
 <body>
-  <!-- Mint + Orange frames -->
-  <div class="frame mint"></div>
-  <div class="frame orange"></div>
+  <div class="page-shell">
+    <div class="page-shell__inner">
 
-  <!-- Logo -->
-  <div class="logo-wrap">
-    <div class="brand-box">
-      <h1 class="brand">AiVA</h1>
-      <p class="tagline">Aircraft Management. In Real Time.</p>
+      <!-- Logo -->
+      <header class="logo-wrap">
+        <div class="brand-box">
+          <h1 class="brand">AiVA</h1>
+          <p class="tagline"><span>Aircraft Management. In Real Time.</span></p>
+        </div>
+      </header>
+
+      <!-- Main -->
+      <div class="content">
+        <!-- Navb -->
+        <nav class="navbar">
+          <ul>
+            <li><a href="index.html">Home</a></li>
+            <li><a href="inventory.html" aria-current="page">Inventory</a></li>
+            <li><a href="workorders.html">Work Orders</a></li>
+            <li><a href="reports.html">Reports</a></li>
+            <li><a href="settings.html">Settings</a></li>
+            <li><a href="movements.html">Movements</a></li>
+          </ul>
+        </nav>
+
+        <main>
+          <h2>Inventory</h2>
+          <p>Manage your aircraft inventory.</p>
+
+          <!-- Add Item Form Add -->
+          <form id="add-form" class="inv-search" style="flex-wrap:wrap; gap:12px; margin-bottom:16px;">
+            <input name="part_number" placeholder="Part Number" required />
+            <input name="batch_number" placeholder="Batch Number" required />
+            <input name="quantity" type="number" placeholder="Qty" required />
+            <button class="export-btn" type="submit">➕ Add Item</button>
+          </form>
+
+          <!-- Search -->
+          <div class="inv-search">
+            <label for="q">Search</label>
+            <input id="q" type="text" placeholder="Search part or batch…" autocomplete="off" />
+            <button id="clearSearch" type="button" class="clear-btn" aria-label="Clear search" hidden>Clear</button>
+          </div>
+
+          <!-- Results / CSV for expoerting -->
+          <div class="inv-meta">Results: <span id="resultCount" class="badge">0</span></div>
+          <button id="exportCsvBtn" class="export-btn">⬇️ Download CSV</button>
+          <button id="refreshBtn" class="export-btn">🔄 Refresh</button>
+
+          <!-- Table Table Table -->
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Part</th>
+                  <th>Batch</th>
+                  <th>Qty</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="inv-body"></tbody>
+            </table>
+          </div>
+        </main>
+      </div>
     </div>
   </div>
 
-  <!-- Main content area -->
-  <div class="content">
-    <!-- Navbar -->
-    <nav class="navbar">
-  <ul>
-    <li><a href="index.html">Home</a></li>
-    <li><a href="inventory.html">Inventory</a></li>
-    <li><a href="workorders.html">Work Orders</a></li>
-    <li><a href="reports.html">Reports</a></li>
-    <li><a href="settings.html">Settings</a></li>
-  </ul>
-</nav>
+  <!-- Toast -->
+  <div id="toast">✅ Action complete</div>
 
+  <!-- Script -->
+  <script type="module">
+    const tbody = document.getElementById('inv-body');
+    const toast = document.getElementById('toast');
+    const qBox = document.getElementById('q');
+    const clearBtn = document.getElementById('clearSearch');
+    const resultCount = document.getElementById('resultCount');
+    let allItems = [];
 
-    <!-- Page-specific content -->
-    <h2>Inventory</h2>
-    <p>This is the Inventory page.</p>
-  </div>
+    function showToast(msg) {
+      toast.textContent = msg;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2500);
+    }
+
+    // Load inventory reread research
+    async function loadItems() {
+      try {
+        const res = await fetch('/api/items');
+        allItems = await res.json();
+        render(allItems);
+      } catch (err) {
+        console.error('Error loading items:', err);
+      }
+    }
+
+    // Render table
+    function render(items) {
+      const filtered = items.filter(i => i.batch_id);
+      resultCount.textContent = filtered.length;
+      tbody.innerHTML = filtered.map(i => `
+        <tr data-id="${i.batch_id}">
+          <td>${i.part_number}</td>
+          <td>${i.batch_number}</td>
+          <td contenteditable="true" data-field="quantity">${i.quantity ?? 0}</td>
+          <td>
+            <button class="action-btn edit" title="Save Qty">💾</button>
+            <button class="action-btn delete" title="Delete">🗑️</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    // Add item form
+    document.getElementById('add-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const form = e.target;
+      const payload = {
+        part_number: form.part_number.value,
+        batch_number: form.batch_number.value,
+        quantity: parseInt(form.quantity.value, 10)
+      };
+      try {
+        const res = await fetch('/api/items', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const json = await res.json();
+        if (json.ok) {
+          showToast('✅ Item added');
+          form.reset();
+          loadItems();
+        } else {
+          showToast('⚠️ Add failed');
+        }
+      } catch (err) {
+        console.error(err);
+        showToast('⚠️ Add failed');
+      }
+    });
+
+    // Table actions (edit / delete)
+    tbody.addEventListener('click', async (e) => {
+      const tr = e.target.closest('tr');
+      if (!tr) return;
+      const batchId = tr.dataset.id;
+
+      // Save qty
+      if (e.target.classList.contains('edit')) {
+        const qtyCell = tr.querySelector('[data-field="quantity"]');
+        const newQty = parseInt(qtyCell.textContent.trim(), 10);
+        try {
+          const res = await fetch(`/api/items/${batchId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ quantity: newQty })
+          });
+          const json = await res.json();
+          if (json.ok) showToast('💾 Quantity updated');
+          else showToast('⚠️ Update failed');
+        } catch (err) {
+          console.error(err);
+          showToast('⚠️ Update failed');
+        }
+      }
+
+      // Delete Delete Delete
+      if (e.target.classList.contains('delete')) {
+        if (!confirm('Delete this batch?')) return;
+        try {
+          const res = await fetch(`/api/items/${batchId}`, { method: 'DELETE' });
+          const json = await res.json();
+          if (json.ok) {
+            tr.remove();
+            showToast('🗑️ Deleted');
+          } else {
+            showToast('⚠️ Delete failed');
+          }
+        } catch (err) {
+          console.error(err);
+          showToast('⚠️ Delete failed');
+        }
+      }
+    });
+
+    // Search Search Search
+    qBox.addEventListener('input', () => {
+      const q = qBox.value.trim().toLowerCase();
+      clearBtn.hidden = !q;
+      render(allItems.filter(i =>
+        (i.part_number || '').toLowerCase().includes(q) ||
+        (i.batch_number || '').toLowerCase().includes(q)
+      ));
+    });
+    clearBtn.addEventListener('click', () => {
+      qBox.value = '';
+      clearBtn.hidden = true;
+      render(allItems);
+      qBox.focus();
+    });
+
+    // CSV export exportings lol
+    document.getElementById('exportCsvBtn').addEventListener('click', () => {
+      const rows = [['Part','Batch','Qty']];
+      [...tbody.querySelectorAll('tr')].forEach(tr => {
+        const tds = tr.querySelectorAll('td');
+        rows.push([tds[0].textContent, tds[1].textContent, tds[2].textContent]);
+      });
+      const csv = rows.map(r => r.join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'inventory.csv';
+      a.click();
+    });
+
+    // Refresh
+    document.getElementById('refreshBtn').addEventListener('click', loadItems);
+
+    // Initial load
+    loadItems();
+  </script>
 </body>
 </html>
+

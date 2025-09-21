@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Settings - AiVA</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="page-shell">
+    <div class="page-shell__inner">
+
+      <!-- Logo -->
+      <header class="logo-wrap">
+        <div class="brand-box">
+          <h1 class="brand">AiVA</h1>
+          <p class="tagline"><span>Aircraft Management. In Real Time.</span></p>
+        </div>
+      </header>
+
+      <!-- Main content -->
+      <div class="content">
+        <!-- Navbar -->
+        <nav class="navbar">
+          <ul>
+            <li><a href="index.html">Home</a></li>
+            <li><a href="inventory.html">Inventory</a></li>
+            <li><a href="workorders.html">Work Orders</a></li>
+            <li><a href="reports.html">Reports</a></li>
+            <li><a href="settings.html" aria-current="page">Settings</a></li>
+          </ul>
+        </nav>
+
+        <main>
+          <h2>Settings</h2>
+          <p>Update your system defaults here.</p>
+
+          <!-- Settings form -->
+          <form id="s-form" class="inv-search" style="flex-wrap:wrap; gap:12px; margin-top:8px;">
+            <label style="display:flex; flex-direction:column;">
+              <span>Default Low Stock Threshold</span>
+              <input id="lowStockInput" name="low_stock_default" placeholder="e.g. 5" />
+            </label>
+            <label style="display:flex; flex-direction:column;">
+              <span>Default Location</span>
+              <input id="defaultLocationInput" name="default_location" placeholder="e.g. Main Store" />
+            </label>
+            <button class="export-btn" type="submit">Save</button>
+          </form>
+        </main>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Toast system -->
+  <script src="toast.js"></script>
+
+  <!-- Page JS -->
+  <script>
+    async function loadSettings() {
+      try {
+        const res = await fetch('/api/settings');
+        const json = await res.json();
+        if (!json.ok) throw new Error('API error');
+        const data = Object.fromEntries((json.data || []).map(s => [s.key, s.value]));
+
+        document.getElementById('lowStockInput').value = data.low_stock_default || '';
+        document.getElementById('defaultLocationInput').value = data.default_location || '';
+      } catch (err) {
+        console.error('Error loading settings:', err);
+        showToast('⚠️ Failed to load settings', 'error');
+      }
+    }
+
+    async function saveSettings(ev) {
+      ev.preventDefault();
+      const payload = {
+        low_stock_default: document.getElementById('lowStockInput').value,
+        default_location: document.getElementById('defaultLocationInput').value
+      };
+
+      try {
+        const res = await fetch('/api/settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const json = await res.json();
+        if (json.ok) {
+          showToast('✅ Settings saved successfully', 'success');
+        } else {
+          showToast('⚠️ Save failed: ' + json.error, 'error');
+        }
+      } catch (err) {
+        showToast('⚠️ Network error', 'error');
+      }
+    }
+
+    document.getElementById('s-form').addEventListener('submit', saveSettings);
+    loadSettings();
+  </script>
+</body>
+</html>
+
+
+

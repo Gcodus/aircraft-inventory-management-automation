@@ -4,38 +4,102 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Reports - AiVA</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
-  <!-- Frames -->
-  <div class="frame mint"></div>
-  <div class="frame orange"></div>
+  <div class="page-shell">
+    <div class="page-shell__inner">
 
-  <!-- Logo (stays above the nav) -->
-  <div class="logo-wrap">
-    <div class="brand-box">
-      <h1 class="brand">AiVA</h1>
-      <p class="tagline">Aircraft Management. In Real Time.</p>
+      <!-- Logo -->
+      <header class="logo-wrap">
+        <div class="brand-box">
+          <h1 class="brand">AiVA</h1>
+          <p class="tagline"><span>Aircraft Management. In Real Time.</span></p>
+        </div>
+      </header>
+
+      <!-- Main content -->
+      <div class="content">
+        <!-- Navbar -->
+        <nav class="navbar">
+          <ul>
+            <li><a href="index.html">Home</a></li>
+            <li><a href="inventory.html">Inventory</a></li>
+            <li><a href="workorders.html">Work Orders</a></li>
+            <li><a href="reports.html" aria-current="page">Reports</a></li>
+            <li><a href="settings.html">Settings</a></li>
+            <li><a href="movements.html">Movements</a></li>
+          </ul>
+        </nav>
+
+        <main>
+          <h2>Low Stock Report</h2>
+          <p>Items with quantity at or below the threshold set in Settings.</p>
+
+          <button id="refreshBtn" class="export-btn">🔄 Refresh</button>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Part</th>
+                  <th>Batch</th>
+                  <th>Qty</th>
+                  <th>Location</th>
+                  <th>Site</th>
+                  <th>Bin</th>
+                </tr>
+              </thead>
+              <tbody id="lowstock-body"></tbody>
+            </table>
+          </div>
+        </main>
+      </div>
     </div>
   </div>
 
-  <!-- Main content area -->
-  <div class="content">
-    <!-- Navbar (below the logo) -->
-    <nav class="navbar">
-      <ul>
-        <li><a href="index.html">Home</a></li>
-        <li><a href="inventory.html">Inventory</a></li>
-        <li><a href="workorders.html">Work Orders</a></li>
-        <li><a href="reports.html" aria-current="page">Reports</a></li>
-        <li><a href="settings.html">Settings</a></li>
-      </ul>
-    </nav>
+  <script type="module">
+    async function loadLowStock() {
+      try {
+        const res = await fetch('/api/reports/lowstock');
+        const json = await res.json();
+        if (!json.ok) throw new Error('Failed');
 
-    <!-- Page-specific content -->
-    <h2>Reports</h2>
-    <p>This is the Reports page.</p>
-  </div>
+        const tableBody = document.getElementById('lowstock-body');
+        tableBody.innerHTML = json.data.length
+          ? json.data.map(r => `
+              <tr>
+                <td>${r.part_number}</td>
+                <td>${r.batch_number}</td>
+                <td>${r.quantity}</td>
+                <td>${r.location}</td>
+                <td>${r.site}</td>
+                <td>${r.bin}</td>
+              </tr>
+            `).join('')
+          : `<tr><td colspan="6">✅ No low stock items</td></tr>`;
+      } catch (err) {
+        console.error('Error loading report:', err);
+      }
+    }
+
+    // Initial load
+    loadLowStock();
+
+    // Manual refresh button
+    document.getElementById('refreshBtn').addEventListener('click', loadLowStock);
+
+    // Listen for settings updates from settings.html yes yes
+    window.addEventListener('storage', (e) => {
+      if (e.key === 'settingsUpdated') {
+        loadLowStock();
+      }
+    });
+  </script>
 </body>
 </html>
+
+
+
 

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AiVA - Inventory</title>
+  <!-- Montserrat - love this one -->
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <!-- Frames -->
+  <div class="frame mint"></div>
+  <div class="frame orange"></div>
+
+  <!-- Logo block - little i -->
+  <header class="logo-wrap">
+    <div class="brand-box">
+      <h1 class="brand">AiVA</h1>
+      <p class="tagline"><span>Aircraft Management. In Real Time.</span></p>
+    </div>
+  </header>
+
+  <!-- Main content wrapper -->
+  <div class="content">
+    <!-- Navbar -->
+    <nav class="navbar">
+      <ul>
+        <li><a href="index.html">Home</a></li>
+        <li><a href="inventory.html" aria-current="page">Inventory</a></li>
+        <li><a href="workorders.html">Work Orders</a></li>
+        <li><a href="reports.html">Reports</a></li>
+        <li><a href="settings.html">Settings</a></li>
+      </ul>
+    </nav>
+
+    <!-- Page body -->
+    <main>
+      <h2>Inventory</h2>
+      <p>This is the Inventory page.</p>
+      
+      <!-- CSV Export Button -->
+      <button id="exportCsvBtn" class="export-btn">Download CSV</button>
+
+      <!-- Table -->
+    </main>
+  </div>
+
+  <!-- Fetch + render inventory -->
+  <script type="module">
+    async function loadItems() {
+      try {
+        const res = await fetch('/api/items');
+        if (!res.ok) throw new Error('Network response was not ok');
+        const items = await res.json();
+
+        const rows = items
+          .filter(i => i.batch_id) // only show rows with batches yep yep
+          .map(i => `
+            <tr>
+              <td data-label="Part">${i.part_number}</td>
+              <td data-label="Batch">${i.batch_number ?? '-'}</td>
+              <td data-label="Qty">${i.quantity ?? 0}</td>
+            </tr>
+          `).join('');
+
+        const table = document.createElement('table');
+        table.innerHTML = `
+          <thead>
+            <tr>
+              <th>Part</th>
+              <th>Batch</th>
+              <th>Qty</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows || `<tr><td colspan="3">No batch data yet.</td></tr>`}
+          </tbody>
+        `;
+
+        document.querySelector('main').append(table);
+      } catch (err) {
+        console.error('Error loading items:', err);
+        const msg = document.createElement('p');
+        msg.textContent = 'Could not load inventory.';
+        document.querySelector('main').append(msg);
+      }
+    }
+    loadItems();
+
+    // CSV Export function
+    function downloadTableCSV() {
+      const table = document.querySelector('main table');
+      if (!table) return;
+
+      const rows = table.querySelectorAll('tr');
+      let csvContent = Array.from(rows).map(row => {
+        const cols = row.querySelectorAll('td, th');
+        return Array.from(cols)
+          .map(cell => `"${cell.innerText.replace(/"/g, '""')}"`)
+          .join(',');
+      }).join('\n');
+
+      const filename = `inventory_${new Date().toISOString().slice(0,10)}.csv`;
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.setAttribute('href', URL.createObjectURL(blob));
+      link.setAttribute('download', filename);
+      link.style.display = 'none';
+      document.body.append(link);
+      link.click();
+      link.remove();
+    }
+
+    document.getElementById('exportCsvBtn').addEventListener('click', () => {
+      downloadTableCSV();
+    });
+  </script>
+</body>
+</html>

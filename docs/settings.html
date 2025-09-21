@@ -1,40 +1,185 @@
-<!DOCTYPE html>
+]<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Settings - AiVA</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css" />
+  <style>
+    /* Toast notifications */
+    #toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: var(--mint);
+      color: var(--ink);
+      padding: 12px 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      transform: translateY(20px);
+      font-weight: 700;
+      z-index: 1000;
+    }
+    #toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  </style>
 </head>
 <body>
-  <!-- Frames -->
-  <div class="frame mint"></div>
-  <div class="frame orange"></div>
+  <div class="page-shell">
+    <div class="page-shell__inner">
 
-  <!-- Logo (stays above the nav) -->
-  <div class="logo-wrap">
-    <div class="brand-box">
-      <h1 class="brand">AiVA</h1>
-      <p class="tagline">Aircraft Management. In Real Time.</p>
+      <!-- Logo -->
+      <header class="logo-wrap">
+        <div class="brand-box">
+          <h1 class="brand">AiVA</h1>
+          <p class="tagline"><span>Aircraft Management. In Real Time.</span></p>
+        </div>
+      </header>
+
+      <!-- Main content -->
+      <div class="content">
+        <!-- Navbar -->
+        <nav class="navbar">
+          <ul>
+            <li><a href="index.html">Home</a></li>
+            <li><a href="inventory.html">Inventory</a></li>
+            <li><a href="workorders.html">Work Orders</a></li>
+            <li><a href="reports.html">Reports</a></li>
+            <li><a href="settings.html" aria-current="page">Settings</a></li>
+            <li><a href="movements.html">Movements</a></li>
+          </ul>
+        </nav>
+
+        <main>
+          <h2>Settings</h2>
+          <p>Manage system defaults here.</p>
+
+          <!-- Settings form -->
+          <form id="s-form" class="inv-search" style="flex-wrap:wrap; gap:12px; margin-top:12px;">
+            <label style="display:flex; flex-direction:column;">
+              <span>Low Stock Threshold</span>
+              <input name="low_stock_default" placeholder="e.g. 50" />
+            </label>
+            <label style="display:flex; flex-direction:column;">
+              <span>Default Location</span>
+              <input name="default_location" placeholder="e.g. Stores A" />
+            </label>
+            <label style="display:flex; flex-direction:column;">
+              <span>Default Site</span>
+              <input name="default_site" placeholder="e.g. LHR" />
+            </label>
+
+            <!-- Buttonssss -->
+            <div style="display:flex; gap:10px; margin-top:8px;">
+              <button class="export-btn" type="submit">Save Settings</button>
+              <button id="resetBtn" class="export-btn" type="button" style="background:#ffe4e1; border-color:#ff8a3d;">
+                Reset Defaults
+              </button>
+            </div>
+          </form>
+        </main>
+      </div>
     </div>
   </div>
 
-  <!-- Main content area -->
-  <div class="content">
-    <!-- Navbar (below the logo) -->
-    <nav class="navbar">
-      <ul>
-        <li><a href="index.html">Home</a></li>
-        <li><a href="inventory.html">Inventory</a></li>
-        <li><a href="workorders.html">Work Orders</a></li>
-        <li><a href="reports.html">Reports</a></li>
-        <li><a href="settings.html" aria-current="page">Settings</a></li>
-      </ul>
-    </nav>
+  <!-- Toasty -->
+  <div id="toast">✅ Settings saved!</div>
 
-    <!-- Page-specific content -->
-    <h2>Settings</h2>
-    <p>This is the Settings page.</p>
-  </div>
+  <!-- Scripty -->
+  <script type="module">
+    const form = document.getElementById('s-form');
+    const toast = document.getElementById('toast');
+    const resetBtn = document.getElementById('resetBtn');
+
+    // Load existing settings into form
+    async function loadSettings() {
+      try {
+        const res = await fetch('/api/settings');
+        const json = await res.json();
+        if (!json.ok) throw new Error('Failed to load');
+
+        const map = {};
+        json.data.forEach(r => map[r.key] = r.value);
+
+        form.low_stock_default.value = map.low_stock_default || '';
+        form.default_location.value = map.default_location || '';
+        form.default_site.value = map.default_site || '';
+      } catch (err) {
+        console.error('Error loading settings:', err);
+      }
+    }
+
+    // Save settingsss
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const payload = {
+        low_stock_default: form.low_stock_default.value,
+        default_location: form.default_location.value,
+        default_site: form.default_site.value
+      };
+
+      try {
+        const res = await fetch('/api/settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const json = await res.json();
+        if (json.ok) {
+          showToast('✅ Settings saved!');
+          localStorage.setItem('settingsUpdated', Date.now()); // notify reports
+        } else {
+          showToast('⚠️ Save failed');
+        }
+      } catch (err) {
+        console.error('Save error:', err);
+        showToast('⚠️ Save failed');
+      }
+    });
+
+    // Reset defaultssss
+    resetBtn.addEventListener('click', async () => {
+      const defaults = {
+        low_stock_default: '50',
+        default_location: 'Stores A',
+        default_site: 'LHR'
+      };
+
+      try {
+        const res = await fetch('/api/settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(defaults)
+        });
+        const json = await res.json();
+        if (json.ok) {
+          form.low_stock_default.value = defaults.low_stock_default;
+          form.default_location.value = defaults.default_location;
+          form.default_site.value = defaults.default_site;
+          showToast('🔄 Reset to defaults!');
+          localStorage.setItem('settingsUpdated', Date.now()); // notify reportsss
+        } else {
+          showToast('⚠️ Reset failed');
+        }
+      } catch (err) {
+        console.error('Reset error:', err);
+        showToast('⚠️ Reset failed');
+      }
+    });
+
+    function showToast(msg) {
+      toast.textContent = msg;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2500);
+    }
+
+    loadSettings();
+  </script>
 </body>
 </html>
